@@ -1,0 +1,57 @@
+data:
+  train_files: ${env:HOME}/data/medqa/train.parquet
+  val_files: ${env:HOME}/data/medqa/test.parquet
+  train_batch_size: 64  # Reduced from 256
+  val_batch_size: 256   # Reduced from 1312
+  max_prompt_length: 384  # Reduced from 512
+  max_response_length: 192  # Reduced from 256
+
+actor_rollout_ref:
+  model:
+    path: "Qwen/Qwen2.5-0.5B-Instruct"
+    use_sliding_window: true  # Enable sliding window attention
+    sliding_window: 4096      # Reduced window size
+  actor:
+    optim:
+      lr: 1e-6
+    ppo_mini_batch_size: 32   # Reduced from 64
+    ppo_micro_batch_size_per_gpu: 2  # Reduced from 4
+    fsdp_config:
+      param_offload: true     # Enable parameter offloading
+  rollout:
+    log_prob_micro_batch_size_per_gpu: 4  # Reduced from 8
+    tensor_model_parallel_size: 1
+    gpu_memory_utilization: 0.25  # Reduced from 0.4
+    max_num_batched_tokens: 4096  # Reduced from 8192
+    enable_chunked_prefill: true
+  ref:
+    log_prob_micro_batch_size_per_gpu: 2  # Reduced from 4
+    fsdp_config:
+      param_offload: true     # Enable parameter offloading
+
+critic:
+  optim:
+    lr: 1e-5
+  model:
+    path: "Qwen/Qwen2.5-0.5B-Instruct"
+    use_sliding_window: true  # Enable sliding window attention
+    sliding_window: 4096      # Reduced window size
+  ppo_micro_batch_size_per_gpu: 2  # Reduced from 4
+  fsdp_config:
+    param_offload: true       # Enable parameter offloading
+
+algorithm:
+  kl_ctrl:
+    kl_coef: 0.001
+
+trainer:
+  total_epochs: 15
+  val_before_train: true
+  logger: ["console", "wandb"]
+  project_name: "verl"
+  experiment_name: "medqa_0.5B_memory_optimized"
+  default_hdfs_dir: null
+  n_gpus_per_node: 1
+  nnodes: 1
+  save_freq: 10
+  test_freq: 10 

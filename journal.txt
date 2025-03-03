@@ -1,0 +1,139 @@
+2/24:
+
+- No think tags, only length reward produces cot like:
+
+<|im_start|>assistant
+296 <answer>D</answer>
+297 
+298 Granulocyte colony-stimulating factor (G-CSF) is the most appropriate recombinant version for this patient. The patient has developed a diffuse rash across the body, which could be a sign of a drug reaction or a side effect of chemotherapy. G-CSF is a growth factor that stimulates the production of neutrophils, which are a type of white blood cell that helps fight infections. This can be particularly useful in patients undergoing chemotherapy who may be at risk for neutropenia, a condition where the number of neutrophils in the blood is too low to fight off infections.
+299 
+300 The rash could be due to a drug reaction, and G-CSF can help to increase the number of neutrophils in the blood, thereby reducing the risk of infection and potentially improving the patient's quality of life during chemotherapy. Additionally, G-CSF can also help to reduce the duration and severity of neutropenic fever, which can be a significant concern for patients undergoing chemotherapy.
+301 
+302 The other options listed are not typically used for treating chemotherapy-induced neutropenia or for managing the side effects of chemotherapy in the way that G-CSF is. Interleukins are generally used for treating specific conditions, such as cancer, and not for managing chemotherapy
+303 ("Final validation metrics: {'val/test_score/GBaker/MedQA-USMLE-4-options': "
+304  '0.49722001588562353}')
+
+- The model learns to only output <answer> first to satisfy format reward / parsable. Then learns to append explanation after the answer.
+- This is not what we want, however, it does the model knows that it should explain itself, given length reward 
+
+- Trying out: deepseek system prompt, flexible can have stuff between think and answer tags. 
+    - onn both 1.5B and 3B
+    - no length reward
+
+
+- Next: Actually give Q1, Q2 a try for conf estimation
+- Next: Try a more fact-based dataset
+
+
+
+- Need to actually understand the data, know what you're feeding in -- high quality data is imporatnt
+- create own dataset --> balanced difficulty spectrum according to semantic entropy
+- internal sense of confidence
+
+2/25:
+- literature review, MMLU might be a good choice for dataset
+- Diversity of data is important, some hard some easy --> label with semantic entropy + if model gets question right
+- potentially human prune out desirable cold start data
+- first calibrate to semantic entropy introduced acc, then change loss function. Befoer anything no loss function
+
+- TODO: read that general model calibration for neural networks paper (what is the best loss function to use?)
+
+2/26:
+- Try simplest approach first, and modify if it doesn't work
+    - my idea is: ask model 2 questions, output in separate answer boxes
+    - use -NLL for now as reward function, let P_p be predicted prob ans is correct, P_t be true prob ans is correct. Then,
+
+    we want to choose a function f such that 
+    max over P_p of -- p_t f(p_p) + (1 - p_t) f(1 - p_p) = p_p
+
+    in other words, we want p_p = p_t to yield the most reward, so in the theoritical limit our reward-maximizing agent learns to approximate p_t perfectly
+
+    candidate for this is log, which is exactly same as LL
+
+    use regular base 10 log, clipped to -2 (log(0.01) = -2, log(<=0.01) <= -2)
+
+    use scale from 1 - 10 so don't have to worry about clipping + easier for LLM (?)
+
+- recipe: first train to validation convergence without conf reward, then add conf reward on top
+
+- Result
+    - converges to only outputting 8/7 correlates with highest reward, stuck locally optimal
+    - possible solutions:
+        - scale up search (larger model, more generations, longer training time)
+        - TODO: try deepseek, which learned reasoning patterns that work through imitation
+        - first tune to semantic entropy, then use general conf reward
+        - cosine reward
+
+    - Figure out if there's a bug with 'response_length/clip_ratio':
+
+
+
+
+1. VLLM Memory Utilization:
+    - Your gpu_memory_utilization is set to 0.4 which is on the lower side
+    - According to the performance tuning guide, values between 0.5 and 0.7 often give
+  better throughput
+    - Consider increasing to 0.5 or 0.6 if you want faster generation
+  2. max_num_batched_tokens:
+    - You have this set to 8192 which is good
+    - The docs recommend at least 2048, so you're above the minimum
+  3. Temperature and Sampling Settings:
+    - You have temperature: 1.0, top_p: 1, and top_k: -1 which means no filtering
+    - For creative medical QA, you might want a lower temperature (0.7-0.8) and top_p
+  around 0.9
+    - Current settings will produce more random and potentially less focused responses
+  4. Sequence Packing:
+    - You have use_remove_padding: false in your model config
+    - Enabling this can improve performance if you're using llama, mistral, gemma1 or qwen
+   models
+    - Consider setting to true for better throughput
+  5. High batch sizes with long outputs:
+    - With the new longer response_length: 1024, your memory usage will increase
+    - Keep an eye on OOM errors if you're using a high batch size (currently 256)
+    - You might need to reduce batch size or add more GPUs if you encounter memory issues
+  6. Double-check memory allocations:
+    - If you're increasing response_length, you might also need to increase token buffer
+  lengths:
+        - ppo_max_token_len_per_gpu
+      - log_prob_max_token_len_per_gpu
+      - forward_max_token_len_per_gpu
+    - These are set via max_token_len variable in your launch.sh script, which is 16384
+  and should be sufficient
+
+  For medical QA, the most immediate improvement would likely come from tuning the
+  temperature and top_p settings to get more focused, deterministic responses.
+
+
+2/27:
+- fix bugs in config limiting response length -- there was indeed a bug
+  - TODO: parameter tune temperature and top_p, try 
+# Set temperature and top_p for more focused generation
+temperature=0.8
+top_p=0.9
+
+- if we can't even get the model to reason / longer cot regularly, how do we expect this to happen for confidence? skull
+- waiting for GPUs to be open to test actually more than 256 tokens for generation
+
+
+
+2/28:
+- for some reason response length still decreases, 1.5B training for ~200 steps
+- also, convergence still an issue, with or without adding log to the reward func
+- gonna try for baseline --> 3B, only correctness reward. Will it learn to correlate longer CoT with correctness?
+
+
+2/29:
+- 3B response length decrease after 600 steps, only correctness reward??
+- Use reinforce_plus_plus? --> ablation
+- Regress to earlier baseline: use gsm8k instead of medqa, 3B
+- Baseline results: 
+  - reinforce++ comparable perf with PPO, faster as no critic (obviously better than GRPO) --> will use
+  - response length decreasees (to fit format rewards) than increases, as expected
+
+- add support for MMLU, TODO: decide to train on 14.3k test or auxillary train
+
+3/2:
+- Training on MMLU, correctness only reward --> still decrease in response length
+- hypothesis: easier question -> shorter response, easier question -> more likely to be right. shorter response is confounded with more likely to be right
+- TODO: fully understand PPO and how it works, is pretty important to know what's going on to build intuition
+- For now: length reward 3B, does self-reflective type behavior emerge?

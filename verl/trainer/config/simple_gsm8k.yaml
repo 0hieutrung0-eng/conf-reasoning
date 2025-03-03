@@ -1,0 +1,175 @@
+data:
+  train_files: "/home/timothygao/data/gsm8k/train.parquet"
+  val_files: "/home/timothygao/data/gsm8k/test.parquet"
+  train_batch_size: 256
+  val_batch_size: 1312
+  max_prompt_length: 512
+  max_response_length: 1024
+  prompt_key: "prompt"
+  return_raw_chat: false
+  return_raw_input_ids: false
+  shuffle: true
+  tokenizer: null
+
+# Actor rollout and reference settings
+actor_rollout_ref:
+  model:
+    enable_gradient_checkpointing: true
+    external_lib: null
+    override_config: {}
+    path: "Qwen/Qwen2.5-0.5B-Instruct"
+    use_remove_padding: false
+  actor:
+    clip_ratio: 0.2
+    entropy_coeff: 0.001
+    fsdp_config:
+      fsdp_size: -1
+      optimizer_offload: false
+      param_offload: false
+      wrap_policy:
+        min_num_params: 0
+    grad_clip: 1.0
+    kl_loss_coef: 0.001
+    kl_loss_type: "low_var_kl"
+    optim:
+      lr: 1e-06
+      lr_warmup_steps_ratio: 0.0
+      min_lr_ratio: null
+      total_training_steps: -1
+      warmup_style: "constant"
+    ppo_epochs: 1
+    ppo_max_token_len_per_gpu: 16384
+    ppo_micro_batch_size: null
+    ppo_micro_batch_size_per_gpu: 4
+    ppo_mini_batch_size: 64
+    shuffle: false
+    strategy: "fsdp"
+    ulysses_sequence_parallel_size: 1
+    use_dynamic_bsz: false
+    use_kl_loss: false
+  ref:
+    fsdp_config:
+      param_offload: false
+      wrap_policy:
+        min_num_params: 0
+    log_prob_max_token_len_per_gpu: 16384
+    log_prob_micro_batch_size: null
+    log_prob_micro_batch_size_per_gpu: 4
+    log_prob_use_dynamic_bsz: false
+    ulysses_sequence_parallel_size: 1
+  rollout:
+    disable_log_stats: true
+    do_sample: true
+    dtype: "bfloat16"
+    enable_chunked_prefill: true
+    enforce_eager: true
+    free_cache_engine: true
+    gpu_memory_utilization: 0.4
+    ignore_eos: false
+    load_format: "dummy_dtensor"
+    log_prob_max_token_len_per_gpu: 16384
+    log_prob_micro_batch_size: null
+    log_prob_micro_batch_size_per_gpu: 8
+    log_prob_use_dynamic_bsz: false
+    max_num_batched_tokens: 8192
+    max_num_seqs: 1024
+    n: 1
+    name: "vllm"
+    prompt_length: 512
+    response_length: 256
+    temperature: 1.0
+    tensor_model_parallel_size: 1
+    top_k: -1
+    top_p: 1
+  hybrid_engine: true
+
+# Algorithm settings
+algorithm:
+  adv_estimator: "gae"
+  gamma: 1.0
+  kl_ctrl:
+    kl_coef: 0.001
+    type: "fixed"
+  kl_penalty: "kl"
+  lam: 1.0
+
+# Critic settings
+critic:
+  cliprange_value: 0.5
+  forward_max_token_len_per_gpu: 32768
+  forward_micro_batch_size: null
+  forward_micro_batch_size_per_gpu: 4
+  grad_clip: 1.0
+  model:
+    enable_gradient_checkpointing: true
+    external_lib: null
+    fsdp_config:
+      fsdp_size: -1
+      optimizer_offload: false
+      param_offload: false
+      wrap_policy:
+        min_num_params: 0
+    override_config: {}
+    path: "Qwen/Qwen2.5-0.5B-Instruct"
+    tokenizer_path: "Qwen/Qwen2.5-0.5B-Instruct"
+    use_remove_padding: false
+  optim:
+    lr: 1e-05
+    lr_warmup_steps_ratio: 0.0
+    min_lr_ratio: null
+    total_training_steps: -1
+    warmup_style: "constant"
+  ppo_epochs: 1
+  ppo_max_token_len_per_gpu: 32768
+  ppo_micro_batch_size: null
+  ppo_micro_batch_size_per_gpu: 4
+  ppo_mini_batch_size: 64
+  shuffle: false
+  strategy: "fsdp"
+  ulysses_sequence_parallel_size: 1
+  use_dynamic_bsz: false
+
+# Reward model settings
+reward_model:
+  enable: false
+  forward_max_token_len_per_gpu: 32768
+  max_length: null
+  micro_batch_size: null
+  micro_batch_size_per_gpu: null
+  model:
+    external_lib: null
+    fsdp_config:
+      fsdp_size: -1
+      min_num_params: 0
+      param_offload: false
+    input_tokenizer: "Qwen/Qwen2.5-0.5B-Instruct"
+    path: "~/models/FsfairX-LLaMA3-RM-v0.1"
+    use_remove_padding: false
+  reward_manager: "naive"
+  strategy: "fsdp"
+  ulysses_sequence_parallel_size: 1
+  use_dynamic_bsz: false
+
+# Trainer settings
+trainer:
+  critic_warmup: 0
+  default_hdfs_dir: null
+  default_local_dir: checkpoints/${trainer.experiment_name} # local checkpoint path
+  del_local_ckpt_after_load: false
+  logger: ["console", "wandb"]
+  n_gpus_per_node: 1
+  nnodes: 1
+  project_name: "verl"
+  experiment_name: "gsm8k_0.5B_baseline"
+  remove_previous_ckpt_in_save: false
+  resume_from_path: false
+  resume_mode: "auto"
+  save_freq: 10
+  test_freq: 10
+  total_epochs: 15
+  total_training_steps: null
+  val_before_train: True
+  val_generations_to_log_to_wandb: 1
+  
+
+  
