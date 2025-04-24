@@ -62,6 +62,11 @@ def correctness_reward(solution_str, ground_truth):
     return int(extract_solution(solution_str)[0] == ground_truth)
 
 def length_reward(solution_str, ground_truth):
+    
+    ground_truth = ground_truth.strip()
+    if extract_solution(solution_str)[0] != ground_truth:
+        return 0
+    
     MX_CHAR_LEN = 2500
     
     cur_len = min(len(solution_str), MX_CHAR_LEN)
@@ -110,7 +115,7 @@ def compute_score(solution_str, ground_truth, extra_info):
         return (
             1 * correctness_reward(solution_str, ground_truth) 
             + 0.1 * format_rewards(solution_str) 
-            + 0.5 * length_reward(solution_str, ground_truth)
+            + 0.3 * length_reward(solution_str, ground_truth)
         )
         
     return (

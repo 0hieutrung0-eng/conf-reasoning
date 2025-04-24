@@ -1,0 +1,152 @@
+data:
+  train_files: "/home/timothygao/data/mmlu_conf/train.parquet"
+  val_files: "/home/timothygao/data/mmlu_conf/test.parquet"
+  train_batch_size: 256
+  val_batch_size: 1312
+  max_prompt_length: 768
+  max_response_length: 1536
+  prompt_key: "prompt"
+  return_raw_chat: false
+  return_raw_input_ids: false
+  shuffle: true
+  tokenizer: null
+
+# Actor rollout and reference settings
+actor_rollout_ref:
+  model:
+    enable_gradient_checkpointing: true
+    external_lib: null
+    override_config: {}
+    path: "Qwen/Qwen2.5-3B-Instruct"
+    use_remove_padding: true
+  actor:
+    clip_ratio: 0.2
+    entropy_coeff: 0.001
+    fsdp_config:
+      fsdp_size: -1
+      optimizer_offload: false
+      param_offload: false
+      wrap_policy:
+        min_num_params: 0
+    grad_clip: 1.0
+    kl_loss_coef: 0.001
+    kl_loss_type: "low_var_kl"
+    optim:
+      lr: 1e-06
+      lr_warmup_steps_ratio: 0.0
+      min_lr_ratio: null
+      total_training_steps: -1
+      warmup_style: "constant"
+    ppo_epochs: 1
+    ppo_max_token_len_per_gpu: 24576
+    ppo_micro_batch_size: null
+    ppo_micro_batch_size_per_gpu: 4
+    ppo_mini_batch_size: 64
+    shuffle: false
+    strategy: "fsdp"
+    ulysses_sequence_parallel_size: 1
+    use_dynamic_bsz: true
+    use_kl_loss: false
+  ref:
+    fsdp_config:
+      param_offload: false
+      wrap_policy:
+        min_num_params: 0
+    log_prob_max_token_len_per_gpu: ${actor_rollout_ref.actor.ppo_max_token_len_per_gpu}
+    log_prob_micro_batch_size: null
+    log_prob_micro_batch_size_per_gpu: 4
+    log_prob_use_dynamic_bsz: ${actor_rollout_ref.actor.use_dynamic_bsz}
+    ulysses_sequence_parallel_size: ${actor_rollout_ref.actor.ulysses_sequence_parallel_size}
+  rollout:
+    disable_log_stats: true
+    do_sample: true
+    dtype: "bfloat16"
+    enable_chunked_prefill: true
+    enforce_eager: true
+    free_cache_engine: true
+    gpu_memory_utilization: 0.4
+    ignore_eos: false
+    load_format: "dummy_dtensor"
+    log_prob_max_token_len_per_gpu: ${actor_rollout_ref.actor.ppo_max_token_len_per_gpu}
+    log_prob_micro_batch_size: null
+    log_prob_micro_batch_size_per_gpu: 8
+    log_prob_use_dynamic_bsz: ${actor_rollout_ref.actor.use_dynamic_bsz}
+    max_num_batched_tokens: 32768
+    max_num_seqs: 1024
+    n: 1
+    name: "vllm"
+    prompt_length: ${data.max_prompt_length}  # not use for opensource
+    response_length: ${data.max_response_length}
+    temperature: 1.0
+    tensor_model_parallel_size: 1
+    top_k: -1
+    top_p: 1
+  hybrid_engine: true
+
+# Algorithm settings
+algorithm:
+  adv_estimator: "reinforce_plus_plus"
+  gamma: 1.0
+  kl_ctrl:
+    kl_coef: 0.001
+    type: "fixed"
+  kl_penalty: "kl"
+  lam: 1.0
+
+# Critic settings
+critic:
+  cliprange_value: 0.5
+  forward_max_token_len_per_gpu: 8192
+  forward_micro_batch_size: null
+  forward_micro_batch_size_per_gpu: 4
+  grad_clip: 1.0
+  model:
+    enable_gradient_checkpointing: true
+    external_lib: null
+    fsdp_config:
+      fsdp_size: -1
+      optimizer_offload: false
+      param_offload: false
+      wrap_policy:
+        min_num_params: 0
+    override_config: {}
+    path: ${actor_rollout_ref.model.path}
+    tokenizer_path: ${actor_rollout_ref.model.path}
+    use_remove_padding: ${actor_rollout_ref.model.use_remove_padding}
+  optim:
+    lr: 1e-05
+    lr_warmup_steps_ratio: 0.0
+    min_lr_ratio: null
+    total_training_steps: -1
+    warmup_style: "constant"
+  ppo_epochs: ${actor_rollout_ref.actor.ppo_epochs}
+  ppo_max_token_len_per_gpu: 8192
+  ppo_micro_batch_size: null
+  ppo_micro_batch_size_per_gpu: 4
+  ppo_mini_batch_size: ${actor_rollout_ref.actor.ppo_mini_batch_size}
+  shuffle: ${actor_rollout_ref.actor.shuffle}
+  strategy: "fsdp"
+  ulysses_sequence_parallel_size: 1
+  use_dynamic_bsz: ${actor_rollout_ref.actor.use_dynamic_bsz}
+
+# Reward model settings
+reward_model:
+  enable: false
+
+# Trainer settings
+trainer:
+  critic_warmup: 0
+  default_hdfs_dir: null
+  default_local_dir: /scratch/one_month/current/timothygao/${trainer.experiment_name} # local checkpoint path
+  del_local_ckpt_after_load: false
+  logger: ["console", "wandb"]
+  nnodes: 1
+  project_name: "verl"
+  remove_previous_ckpt_in_save: false
+  resume_from_path: false
+  save_freq: 400
+  test_freq: 20
+  total_epochs: 50
+  total_training_steps: null
+  val_before_train: True
+  val_generations_to_log_to_wandb: 3 

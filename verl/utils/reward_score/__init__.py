@@ -34,6 +34,9 @@ def _default_compute_score(data_source, solution_str, ground_truth, extra_info=N
     elif data_source == 'medqa_conf':
         from . import medqa_conf
         res = medqa_conf.compute_score(solution_str, ground_truth, extra_info)
+    elif data_source == 'mmlu_conf':
+        from . import mmlu_conf
+        res = mmlu_conf.compute_score(solution_str, ground_truth, extra_info)
     elif 'medqa' in data_source.lower():
         from . import medqa
         res = medqa.compute_score(solution_str, ground_truth, extra_info)

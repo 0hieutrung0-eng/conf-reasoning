@@ -6,7 +6,7 @@ export VLLM_ATTENTION_BACKEND=XFORMERS
 # python3 examples/data_preprocess/mmlu_baseline.py --local_dir ~/data/mmlu_baseline
 
 CONFIG_NAME="mmlu_baseline"
-experiment_name="mmlu_length_reward_3B"
+experiment_name="mmlu_length_reward_only_on_correct_3B"
 train_from_scratch=true
 
 # Count the number of GPUs specified in CUDA_VISIBLE_DEVICES

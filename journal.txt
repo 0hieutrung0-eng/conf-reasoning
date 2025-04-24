@@ -137,3 +137,8 @@ top_p=0.9
 - hypothesis: easier question -> shorter response, easier question -> more likely to be right. shorter response is confounded with more likely to be right
 - TODO: fully understand PPO and how it works, is pretty important to know what's going on to build intuition
 - For now: length reward 3B, does self-reflective type behavior emerge?
+
+
+3/3:
+- self-reflective behvario doesn't emerge with just 3B, although does result in longer cot
+- experiment: length reward only on correct vs length reward regardless

@@ -38,7 +38,8 @@ actor_rollout_ref:
       total_training_steps: -1
       warmup_style: "constant"
     ppo_epochs: 1
-    ppo_max_token_len_per_gpu: 16384
+    # ppo_max_token_len_per_gpu: 16384
+    ppo_max_token_len_per_gpu: 24576
     ppo_micro_batch_size: null
     ppo_micro_batch_size_per_gpu: 4
     ppo_mini_batch_size: 64
@@ -137,7 +138,7 @@ reward_model:
 trainer:
   critic_warmup: 0
   default_hdfs_dir: null
-  default_local_dir: checkpoints/${trainer.experiment_name} # local checkpoint path
+  default_local_dir: /scratch/one_month/current/timothygao/${trainer.experiment_name} # local checkpoint path
   del_local_ckpt_after_load: false
   logger: ["console", "wandb"]
   nnodes: 1
