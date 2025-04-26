@@ -6,11 +6,14 @@ from datasets import load_dataset
 from transformers import AutoTokenizer
 from vllm import LLM, SamplingParams
 import pandas as pd
-from tqdm import tqdm
+from tqdm import tqdm, trange
 import re
 
+os.environ["CUDA_VISIBLE_DEVICES"] = "7"
+os.environ["HF_HOME"] = "/tmp"
+
 # Number of rollouts per question
-NUM_ROLLOUTS = 8
+NUM_ROLLOUTS = 16
 # Save checkpoint every N entries
 SAVE_INTERVAL = 100
 
@@ -21,18 +24,16 @@ def load_mmlu_dataset():
     return dataset["auxiliary_train"]
 
 def initialize_model():
-    """Initialize the Qwen2.5-7B-Instruct model via vllm"""
     print("Initializing model...")
-    tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-7B-Instruct")
+    tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-3B-Instruct")
     
     sampling_params = SamplingParams(
-        temperature=0.8,  # Slightly higher temperature for more diversity
-        top_p=0.9,
-        max_tokens=64,   # We only need a short answer
+        temperature=0.7,
+        top_p=0.8,
+        max_tokens=64,
     )
     
-    # Load the model
-    llm = LLM(model="Qwen/Qwen2.5-7B-Instruct")
+    llm = LLM(model="Qwen/Qwen2.5-3B-Instruct")
     return tokenizer, llm, sampling_params
 
 def format_question(question, choices):
@@ -93,13 +94,10 @@ def calculate_entropy(counts):
     for count in counts.values():
         if count > 0:
             p = count / total
-            # Use negative sum of p * log(p) for entropy calculation
-            # Using log base 2 as is standard for information entropy
             entropy -= p * math.log2(p)
     return entropy
 
 def main():
-    # Load dataset
     dataset = load_mmlu_dataset()
     print(f"Loaded {len(dataset)} examples")
 
@@ -150,12 +148,12 @@ def main():
         df['entropy'] = 0.0
     
     # Process in batches to save progress
-    for start_idx in range(start_from_idx, len(df), SAVE_INTERVAL):
+    for start_idx in tqdm(range(start_from_idx, len(df), SAVE_INTERVAL)):
         end_idx = min(start_idx + SAVE_INTERVAL, len(df))
         print(f"Processing examples {start_idx} to {end_idx-1}")
         
         # Process each question in the current batch
-        for idx in tqdm(range(start_idx, end_idx)):
+        for idx in range(start_idx, end_idx):
             question = df.iloc[idx]['question']
             choices = df.iloc[idx]['choices']
             
@@ -163,15 +161,20 @@ def main():
             messages = format_question(question, choices)
             text = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
             
+            print("Question: ----->>", text)
+            
             # Track answer counts
             answer_counts = {'A': 0, 'B': 0, 'C': 0, 'D': 0}
             
             # Perform rollouts
             for _ in range(NUM_ROLLOUTS):
                 try:
-                    outputs = llm.generate([text], sampling_params)
+                    outputs = llm.generate([text], sampling_params, use_tqdm=False)
                     response = outputs[0].outputs[0].text.strip()
                     answer = extract_answer(response)
+                    
+                    # print(f"Response: {response}")
+                    # print(f"Answer: {answer}")
                     
                     if answer in answer_counts:
                         answer_counts[answer] += 1
@@ -181,14 +184,12 @@ def main():
                     print(f"Error during rollout: {e}")
                     continue
             
-            # Update dataframe with counts and entropy
             df.at[idx, 'count_A'] = answer_counts['A']
             df.at[idx, 'count_B'] = answer_counts['B']
             df.at[idx, 'count_C'] = answer_counts['C']
             df.at[idx, 'count_D'] = answer_counts['D']
             df.at[idx, 'entropy'] = calculate_entropy(answer_counts)
         
-        # Save checkpoint
         df.to_parquet(output_file)
         print(f"Saved checkpoint to {output_file}")
     
