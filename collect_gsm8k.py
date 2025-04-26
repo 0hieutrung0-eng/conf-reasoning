@@ -20,7 +20,7 @@ def initialize_model():
     tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-3B-Instruct")
     
     sampling_params = SamplingParams(
-        temperature=1.2,
+        temperature=2,
         top_p=1,
         top_k=-1,
         min_p=0,
