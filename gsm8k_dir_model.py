@@ -3,13 +3,23 @@ import numpy as np
 import random
 import pickle
 from sklearn.decomposition import PCA
+from sklearn.model_selection import train_test_split
 import matplotlib.pyplot as plt
 import torch
 import lovely_tensors
+from tqdm import tqdm
 
 lovely_tensors.monkey_patch()
 
-data = "/home/timothygao/data/mmlu_hidden_states.pkl"
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(f"Using device: {device}")
+
+### GSM8K works better than MMLU because MMLU is a decision problem. Suppose there are two options obviosuly wrong. Than 50% change we get that paired with correct answer. So 1/2 chance we auto get it right. Then, the other 1/2 only gets like 50% acc to get what we got (75%~ test accc on direction classifier)
+# one thing to see is if this approach generalized reasoning to beyond just math tasks
+
+# Generative v discriminative model
+
+
 
 # Finds the primary direction corresponding to correctness
 #
@@ -43,6 +53,10 @@ class DirectionFinder(torch.nn.Module):
         with torch.no_grad():
             print(torch.norm(self.u))
     
+    def is_same_direction(self, u, v):
+        with torch.no_grad():
+            return torch.dot(u, v) > 0
+    
     def loss(self, diff_dir):
         # negative of the component of diff_dir in the direction of u
 
@@ -62,49 +76,41 @@ def get_angle(u, v):
     
     return angle_deg
 
-with open(data, "rb") as f:
-    df = pickle.load(f)
-
-num_to_char = {0: 'A', 1: 'B', 2: 'C', 3: 'D'}
-
-labeled_vectors = []
-N = len(df['A'])
-
-for i in range(N):
-    cor_answer = num_to_char[df['answer'][i]]
-    cor_answer_vector = df[cor_answer][i]
+# Load labeled vectors
+with open("labeled_vectors.pkl", "rb") as f:
+    labeled_vectors = pickle.load(f)
     
-    all_vectors = []
-    for j in ['A', 'B', 'C', 'D']:
-        if j == cor_answer:
-            continue
-        all_vectors.append(df[j][i])
-        
-    random.shuffle(all_vectors)
+vector_diffs = []
+
+for i in range(0, len(labeled_vectors), 2):
+    vector_diffs.append(labeled_vectors[i][0][-1] - labeled_vectors[i+1][0][-1])
     
-    for j in all_vectors:
-        labeled_vectors.append(cor_answer_vector - j)
-        
-        
-labeled_vectors = np.array(labeled_vectors)
+vector_diffs = np.array(vector_diffs)
+
+labeled_vectors = np.array(vector_diffs)
         
 # Traiing loop
 
-model = DirectionFinder()
-optimizer = torch.optim.Adam(model.parameters(), lr=0.1)
+model = DirectionFinder().to(device)
+optimizer = torch.optim.Adam(model.parameters(), lr=0.005)
 
-labeled_tensors = torch.tensor(labeled_vectors)
+train_vectors, test_vectors = train_test_split(labeled_vectors, test_size=0.1, random_state=42)
+train_vectors = torch.tensor(train_vectors, dtype=torch.float32).to(device)
+test_vectors = torch.tensor(test_vectors, dtype=torch.float32).to(device)
 
-num_epochs = 100
+print(f"Train set size: {len(train_vectors)}, Test set size: {len(test_vectors)}")
 
-for epoch in range(num_epochs):
+num_epochs = 1000
+
+for epoch in tqdm(range(num_epochs)):
+    model.train()
     total_loss = 0
     
-    indices = torch.randperm(len(labeled_tensors))
-    shuffled_tensors = labeled_tensors[indices]
+    indices = torch.randperm(len(train_vectors))
+    shuffled_tensors = train_vectors[indices]
     
-    before_u = model.u.detach().clone()
-    
+    before_u = model.u.detach().clone().cpu().numpy()
+        
     for diff_dir in shuffled_tensors:
         optimizer.zero_grad()
         loss = model.loss(diff_dir)
@@ -113,27 +119,29 @@ for epoch in range(num_epochs):
         optimizer.step()
                 
         total_loss += loss.item()
+    total_loss /= len(shuffled_tensors)
     
-    after_u = model.u.detach().clone()
-    
-    before_u = before_u.numpy()
-    after_u = after_u.numpy()
-    
-    print(before_u)
-    print(after_u)
+    after_u = model.u.detach().clone().cpu().numpy()
     
     angle = get_angle(before_u, after_u)
-    
-    # print(before_u)
-    # print(after_u)
-    
-    print("Angle difference between epoch:")
-    print(angle)
+
     print(f"Epoch {epoch+1}/{num_epochs}, Loss: {total_loss:.4f}, Angle: {angle:.4f}")
     model.print_norm()
+    
+    # Eval
+    with torch.no_grad():
+        model.eval()
+        tot, correct = 0, 0
+        
+        for diff_dir in test_vectors:
+            correct += int(model.is_same_direction(diff_dir, model.u))
+            tot += 1
+        
+        print(f"Test accuracy: {correct/tot:.4f} ({correct}/{tot})")
+    
 
 # # Extract the learned direction
-# learned_direction = model.u.detach().numpy()
+# learned_direction = model.u.detach().cpu().numpy() if device.type == 'cuda' else model.u.detach().numpy()
 
 # # Save the learned direction
 # with open("learned_direction.pkl", "wb") as f:
